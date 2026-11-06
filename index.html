@@ -412,6 +412,34 @@
           transition: none !important;
         }
       }
+      :root[data-theme="light"] {
+        --bg: #fbf1e1;
+        --bg2: #fffaf0;
+        --card: #ffffff;
+        --line: #e6d3ad;
+        --gold: #8a1230;
+        --gold2: #6b0a1c;
+        --red: #b30f2a;
+        --tx: #3a0a14;
+        --mut: #7a5560;
+      }
+      [data-theme="light"] header {
+        background: rgba(255, 250, 240, 0.92);
+      }
+      [data-theme="light"] .over,
+      [data-theme="light"] button.d {
+        color: #b30f2a;
+      }
+      [data-theme="light"] .badge {
+        color: #6b0a1c;
+      }
+      [data-theme="light"] .yes,
+      [data-theme="light"] .no {
+        color: #fff;
+      }
+      [data-theme="light"] .toast {
+        color: #fffaf0;
+      }
     </style>
   </head>
   <body>
@@ -455,8 +483,16 @@
         >ToiPlan
       </div>
       <nav id="nav"></nav>
+      <span style="display: flex; gap: 6px"
+        ><button class="sm" id="thm" onclick="togTheme()" aria-label="Тема">
+          ☀</button
+        ><button class="sm" id="lng" onclick="togLang()" aria-label="Язык">
+          KY
+        </button></span
+      >
     </header>
     <main id="main"></main>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script>
       // ===== Фейковый бэкенд (в духе JSONPlaceholder) =====
@@ -1090,18 +1126,22 @@ ${e.rsvp_open ? `<div class="card" style="max-width:420px;margin:auto"><label>В
       // ===== Расходы =====
       async function budget(m) {
         const l = db.expenses.filter((x) => x.eid == S.eid),
-          s = summary(S.eid);
+          s = summary(S.eid),
+          X0 = db.expenses.find((x) => x.id == xe) || {};
         m.innerHTML =
           tabs("budget") +
           `<div class="grid"><div class="card"><div class="mut">План</div><div class="num" style="font-size:20px">${money(s.plan)}</div></div><div class="card"><div class="mut">Факт</div><div class="num" style="font-size:20px">${money(s.fact)}</div></div><div class="card"><div class="mut">Разница</div><div class="num" style="font-size:20px">${money(s.plan - s.fact)}</div></div></div>
-<div class="card"><div class="wrap"><table>${l.map((x) => `<tr><td>${EC[x.category]}<br><b>${E(x.title)}</b></td><td>${money(x.planned)}<br><span class="mut">факт ${money(x.actual)}</span></td><td><label style="margin:0"><input type="checkbox" style="width:auto;min-height:0" ${x.paid ? "checked" : ""} onchange="payX(${x.id},this.checked)"> оплачено</label></td><td><button class="d sm" onclick="delX(${x.id})">✕</button></td></tr>`).join("") || "<tr><td>Пока ничего нет</td></tr>"}</table></div></div>
-<div class="card"><h3>Добавить расход</h3><div class="row"><select id="xc">${Object.entries(
+<div class="card"><div class="wrap"><table>${l.map((x) => `<tr><td>${EC[x.category]}<br><b>${E(x.title)}</b></td><td>${money(x.planned)}<br><span class="mut">факт ${money(x.actual)}</span></td><td><label style="margin:0"><input type="checkbox" style="width:auto;min-height:0" ${x.paid ? "checked" : ""} onchange="payX(${x.id},this.checked)"> оплачено</label></td><td><button class="sm" onclick="editX(${x.id})" aria-label="Изменить">✎</button> <button class="d sm" onclick="delX(${x.id})">✕</button></td></tr>`).join("") || "<tr><td>Пока ничего нет</td></tr>"}</table></div></div>
+<div class="card"><h3>${xe ? "Изменить расход" : "Добавить расход"}</h3><div class="row"><select id="xc">${Object.entries(
             EC,
           )
-            .map((x) => `<option value="${x[0]}">${x[1]}</option>`)
+            .map(
+              (x) =>
+                `<option value="${x[0]}" ${X0.category == x[0] ? "selected" : ""}>${x[1]}</option>`,
+            )
             .join(
               "",
-            )}</select><input id="xt" placeholder="Название"><input id="xp" type="number" placeholder="План, сом"></div><p><button class="p" onclick="addX()">Добавить</button></p></div>`;
+            )}</select><input id="xt" placeholder="Название" value="${E(X0.title || "")}"><input id="xp" type="number" placeholder="План, сом" value="${X0.planned ?? ""}">${xe ? `<input id="xa" type="number" placeholder="Факт, сом" value="${X0.actual}">` : ""}</div><p><button class="p" onclick="addX()">${xe ? "Сохранить" : "Добавить"}</button>${xe ? ' <button onclick="xe=null;render()">Отмена</button>' : ""}</p></div>`;
       }
       const payX = async (id, v) => {
         await req(() => {
@@ -1117,21 +1157,37 @@ ${e.rsvp_open ? `<div class="card" style="max-width:420px;margin:auto"><label>В
         }, 50);
         render();
       };
+      let xe = null;
       async function addX() {
         if (!id_("xt").value) return;
         await req(() => {
-          db.expenses.push({
-            id: nid(db.expenses),
-            eid: S.eid,
+          const d = {
             category: id_("xc").value,
             title: id_("xt").value,
             planned: +id_("xp").value || 0,
-            actual: 0,
-            paid: false,
-          });
+          };
+          if (xe) {
+            Object.assign(
+              db.expenses.find((a) => a.id == xe),
+              d,
+              { actual: +id_("xa").value || 0 },
+            );
+          } else
+            db.expenses.push({
+              id: nid(db.expenses),
+              eid: S.eid,
+              ...d,
+              actual: 0,
+              paid: false,
+            });
         }, 50);
+        xe = null;
         render();
       }
+      const editX = (id) => {
+        xe = id;
+        render();
+      };
 
       // ===== Задачи =====
       async function tasks(m) {
@@ -1423,7 +1479,7 @@ ${e.rsvp_open ? `<div class="card" style="max-width:420px;margin:auto"><label>В
       }
 
       // ===== Каталог и заявки =====
-      let cf = { c: "", q: "", p: "" };
+      let cf = { c: "", q: "", p: "", d: "" };
       async function catalog(m) {
         m.innerHTML = `<h1>Каталог подрядчиков</h1><div class="card"><div class="row"><select onchange="cf.c=this.value;vlist()"><option value="">Все категории</option>${Object.entries(
           VC,
@@ -1434,7 +1490,7 @@ ${e.rsvp_open ? `<div class="card" style="max-width:420px;margin:auto"><label>В
           )
           .join(
             "",
-          )}</select><input placeholder="Поиск по названию" value="${E(cf.q)}" oninput="cf.q=this.value;vlist()"><input type="number" placeholder="Макс. цена" value="${cf.p}" oninput="cf.p=this.value;vlist()"></div></div><div id="vl" class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))"></div>`;
+          )}</select><input placeholder="Поиск по названию" value="${E(cf.q)}" oninput="cf.q=this.value;vlist()"><input type="number" placeholder="Макс. цена" value="${cf.p}" oninput="cf.p=this.value;vlist()"><select onchange="cf.d=this.value;vlist()"><option value="">Все районы</option>${[...new Set(db.vendors.map((v) => v.district))].map((d) => `<option ${cf.d == d ? "selected" : ""}>${E(d)}</option>`).join("")}</select></div></div><div id="vl" class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))"></div>`;
         vlist();
       }
       function vlist() {
@@ -1443,7 +1499,8 @@ ${e.rsvp_open ? `<div class="card" style="max-width:420px;margin:auto"><label>В
             v.active &&
             (!cf.c || v.category == cf.c) &&
             v.name.toLowerCase().includes(cf.q.toLowerCase()) &&
-            (!cf.p || v.price_from <= +cf.p),
+            (!cf.p || v.price_from <= +cf.p) &&
+            (!cf.d || v.district == cf.d),
         );
         id_("vl").innerHTML =
           l
@@ -1609,6 +1666,169 @@ ${sim.length ? `<h3>Похожие подрядчики</h3><div class="f3">${si
         }, 50);
         render();
       }
+      // ===== Тема и язык =====
+      const KY = {
+        События: "Иш-чаралар",
+        Каталог: "Каталог",
+        Войти: "Кирүү",
+        Выйти: "Чыгуу",
+        Демо: "Демо",
+        Обзор: "Сереп",
+        Гости: "Коноктор",
+        Расходы: "Чыгымдар",
+        Задачи: "Тапшырмалар",
+        "ИИ-помощник": "ЖИ-жардамчы",
+        Заявки: "Арыздар",
+        Приду: "Барам",
+        "Не приду": "Барбайм",
+        Придёт: "Келет",
+        "Не придёт": "Келбейт",
+        "Ждём ответа": "Жооп күтүлөт",
+        Добавить: "Кошуу",
+        Изменить: "Өзгөртүү",
+        Отмена: "Жокко чыгаруу",
+        Подтвердить: "Ырастоо",
+        Сохранить: "Сактоо",
+        "Загрузка…": "Жүктөлүүдө…",
+        "Пока ничего нет": "Азырынча эч нерсе жок",
+        Регистрация: "Каттоо",
+        Вход: "Кирүү",
+        Имя: "Аты",
+        "Пароль (от 6 символов)": "Сырсөз (6 белгиден)",
+        "Создать аккаунт": "Аккаунт түзүү",
+        "Уже есть аккаунт": "Аккаунтум бар",
+        "Мои события": "Менин иш-чараларым",
+        "Создать событие": "Иш-чара түзүү",
+        Создать: "Түзүү",
+        Тип: "Түрү",
+        Название: "Аталышы",
+        "Дата и время": "Күнү жана убактысы",
+        Место: "Орду",
+        "Гостей ожидается": "Күтүлгөн коноктор",
+        "Текст приглашения": "Чакыруу тексти",
+        "Спасибо!": "Рахмат!",
+        "Изменить ответ": "Жоопту өзгөртүү",
+        "Ваше имя": "Сиздин атыңыз",
+        "Сколько человек (1–10)": "Канча адам (1–10)",
+        "Открыть на карте": "Картадан ачуу",
+        "Приём ответов завершён": "Жооптор кабыл алуу бүттү",
+        "Ссылка-приглашение": "Чакыруу шилтемеси",
+        Скопировать: "Көчүрүү",
+        "Открыть как гость": "Конок катары ачуу",
+        "Принимаем ответы": "Жооптор кабыл алынат",
+        "Кошумча — скоро": "Кошумча — жакында",
+        "Чек-лист подготовки": "Даярдык чек-листи",
+        "Изменить событие": "Иш-чараны өзгөртүү",
+        "человек придёт": "адам келет",
+        "не придёт": "келбейт",
+        "ждём ответа": "жооп күтөбүз",
+        "открытых задач": "ачык тапшырмалар",
+        План: "План",
+        Факт: "Факт",
+        Разница: "Айырма",
+        оплачено: "төлөндү",
+        "Добавить расход": "Чыгым кошуу",
+        "Изменить расход": "Чыгымды өзгөртүү",
+        "Новая задача": "Жаңы тапшырма",
+        "Поиск по имени": "Аты боюнча издөө",
+        "Все статусы": "Бардык статустар",
+        "Имя нового гостя": "Жаңы конок аты",
+        "Копировать список": "Тизмени көчүрүү",
+        "Таблица обновляется сама каждые 10 секунд":
+          "Таблица ар 10 секундада өзү жаңырат",
+        "Каталог подрядчиков": "Кызмат көрсөтүүчүлөр каталогу",
+        "Все категории": "Бардык категориялар",
+        "Все районы": "Бардык райондор",
+        "Поиск по названию": "Аталышы боюнча издөө",
+        "Макс. цена": "Макс. баа",
+        Подробнее: "Кененирээк",
+        Позвонить: "Чалуу",
+        Проверено: "Текшерилген",
+        "Отправить заявку": "Арыз жөнөтүү",
+        "Похожие подрядчики": "Окшош кызмат көрсөтүүчүлөр",
+        Пользователи: "Колдонуучулар",
+        Подрядчики: "Кызмат көрсөтүүчүлөр",
+        "новых заявок": "жаңы арыздар",
+        "Сбросить демо-данные": "Демо маалыматты тазалоо",
+        "Напишите сообщение": "Билдирүү жазыңыз",
+        Отправить: "Жөнөтүү",
+        "ИИ думает…": "ЖИ ойлонпуп жатат…",
+        "Чел.": "Адам",
+        "Попробовать демо": "Демону байкап көрүү",
+        "Открыть демо": "Демону ачуу",
+        "Частые вопросы": "Көп берилүүчү суроолор",
+        "Что вы получаете": "Сиз эмнеге ээ болосуз",
+        "Как это работает": "Бул кандай иштейт",
+        "Готовы организовать той?": "Той уюштурууга даярсызбы?",
+        "Гости отвечают прямо сейчас": "Коноктор азыр жооп берип жаташат",
+        "Для свадеб, юбилеев, кыз узатуу и бешик тоя":
+          "Үйлөнүү тойлору, мааракелер, кыз узатуу жана бешик той үчүн",
+        "Той без хаоса: гости, бюджет и подрядчики в одном месте":
+          "Башаламансыз той: коноктор, бюджет жана кызмат көрсөтүүчүлөр бир жерде",
+      };
+      let lang = "ru",
+        theme = "dark";
+      try {
+        lang = localStorage.getItem("tp_lang") || "ru";
+        theme =
+          localStorage.getItem("tp_theme") ||
+          (matchMedia("(prefers-color-scheme: light)").matches
+            ? "light"
+            : "dark");
+      } catch (e) {}
+      function applyTheme() {
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+        id_("thm").textContent = theme == "light" ? "🌙" : "☀";
+      }
+      function togTheme() {
+        theme = theme == "light" ? "dark" : "light";
+        try {
+          localStorage.setItem("tp_theme", theme);
+        } catch (e) {}
+        applyTheme();
+      }
+      function togLang() {
+        lang = lang == "ru" ? "ky" : "ru";
+        try {
+          localStorage.setItem("tp_lang", lang);
+        } catch (e) {}
+        tr();
+      }
+      function tr() {
+        const b = lang == "ru" ? "KY" : "RU",
+          lb = id_("lng");
+        if (lb.textContent != b) lb.textContent = b;
+        document.documentElement.lang = lang == "ru" ? "ru" : "ky";
+        const w = document.createTreeWalker(
+          document.body,
+          NodeFilter.SHOW_TEXT,
+        );
+        let n;
+        while ((n = w.nextNode())) {
+          if (n.parentNode.closest("script,style")) continue;
+          if (n._o !== undefined && lang == "ru") {
+            n.nodeValue = n._o;
+            n._o = undefined;
+            continue;
+          }
+          const base = (n._o !== undefined ? n._o : n.nodeValue).trim();
+          if (lang == "ky" && KY[base]) {
+            if (n._o === undefined) n._o = n.nodeValue;
+            n.nodeValue = n._o.replace(base, KY[base]);
+          }
+        }
+        document.querySelectorAll("[placeholder]").forEach((e) => {
+          if (e._p === undefined) e._p = e.placeholder;
+          const k = lang == "ky" && KY[e._p] ? KY[e._p] : e._p;
+          if (e.placeholder != k) e.placeholder = k;
+        });
+      }
+      new MutationObserver(() => {
+        clearTimeout(tr.t);
+        tr.t = setTimeout(tr, 30);
+      }).observe(document.body, { childList: true, subtree: true });
+      applyTheme();
       render();
     </script>
   </body>
